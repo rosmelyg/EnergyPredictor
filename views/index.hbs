@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{pageTitle}}</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/main.css">
+</head>
+<body>
+  <nav class="navbar navbar-dark bg-dark shadow-sm">
+    <div class="container">
+      <a class="navbar-brand fw-bold text-white" href="/">⚡ Predictor de Consumo Eléctrico del Hogar</a>
+    </div>
+  </nav>
+
+  <main class="container my-4">
+    <div class="row justify-content-center">
+      <div class="col-12 col-lg-10">
+
+        {{#if hasError}}
+          <div class="alert alert-danger shadow-sm" role="alert">
+            <h6 class="alert-heading fw-bold mb-1">⚠️ Error de validación en el servidor:</h6>
+            <div>{{errorMessage}}</div>
+          </div>
+        {{/if}}
+
+        <div class="card shadow-sm mb-4">
+          <div class="card-header bg-light">
+            <h5 class="mb-0 text-dark fw-bold">Registro Histórico de Consumo Eléctrico (12 Meses)</h5>
+          </div>
+          <div class="card-body">
+            <p class="text-muted mb-3">
+              Ingrese exactamente <strong>12 registros mensuales</strong> organizados desde el mes más antiguo hasta el más reciente en el formato <code>YYYY-MM-DD, Consumo(kWh)</code> (uno por línea).
+            </p>
+
+            {{!-- novalidate asegura que la validación se ejecute 100% en el servidor sin interferencia del navegador --}}
+            <form action="/predict" method="POST" novalidate>
+              <div class="mb-3">
+                <label for="historicalData" class="form-label fw-bold">Serie histórica (Fecha, Consumo en kWh):</label>
+                <textarea
+                  class="form-control code-input"
+                  id="historicalData"
+                  name="historicalData"
+                  rows="12"
+                  placeholder="2025-05-01, 150.35&#10;2025-06-01, 152.10"
+                >{{rawData}}</textarea>
+              </div>
+
+              <div class="mb-3">
+                <label for="predictionMode" class="form-label fw-bold">Modo de predicción:</label>
+                <select class="form-select" id="predictionMode" name="predictionMode">
+                  <option value="sma" {{#if (equals selectedMode "sma")}}selected{{/if}}>
+                    Promedio Móvil Simple (SMA)
+                  </option>
+                  <option value="linear" {{#if (equals selectedMode "linear")}}selected{{/if}}>
+                    Regresión Lineal
+                  </option>
+                  <option value="variation" {{#if (equals selectedMode "variation")}}selected{{/if}}>
+                    Variación Porcentual
+                  </option>
+                  <option value="trend" {{#if (equals selectedMode "trend")}}selected{{/if}}>
+                    Detección de Tendencia
+                  </option>
+                </select>
+              </div>
+
+              <div class="d-grid">
+                <button type="submit" class="btn btn-primary btn-lg">Calcular predicción</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        {{#if hasResult}}
+          <div class="card shadow-sm border-primary mb-4">
+            <div class="card-header bg-primary text-white">
+              <h5 class="mb-0">Resultado del Análisis</h5>
+            </div>
+            <div class="card-body">
+
+              {{!-- SMA RESULT --}}
+              {{#if (equals selectedMode "sma")}}
+                <h5 class="fw-bold text-primary mb-3">Modo: Promedio Móvil Simple (SMA)</h5>
+                <ul class="list-group mb-3">
+                  <li class="list-group-item">
+                    <strong>Promedio calculado (últimos 3 meses):</strong> {{result.average}} kWh
+                  </li>
+                  <li class="list-group-item">
+                    <strong>Posible consumo del siguiente mes (Mes 13):</strong> {{result.nextMonthPrediction}} kWh
+                  </li>
+                  <li class="list-group-item">
+                    <strong>Tendencia del consumo:</strong> <span class="badge bg-primary">{{result.trend}}</span>
+                  </li>
+                </ul>
+                <div class="alert alert-info mb-0">
+                  {{result.message}}
+                </div>
+              {{/if}}
+
+              {{!-- LINEAR REGRESSION RESULT --}}
+              {{#if (equals selectedMode "linear")}}
+                <h5 class="fw-bold text-primary mb-3">Modo: Regresión Lineal (y = mx + b)</h5>
+                <ul class="list-group mb-3">
+                  <li class="list-group-item">
+                    <strong>Posible consumo futuro para el mes número 13:</strong> {{result.predictionMonth13}} kWh
+                  </li>
+                  <li class="list-group-item">
+                    <strong>Valor de la pendiente (m):</strong> {{result.slope}}
+                  </li>
+                  <li class="list-group-item">
+                    <strong>Intercepto en Y (b):</strong> {{result.intercept}}
+                  </li>
+                  <li class="list-group-item">
+                    <strong>Tendencia:</strong> <span class="badge bg-primary">{{result.trend}}</span>
+                  </li>
+                </ul>
+                <div class="alert alert-info mb-0">
+                  {{result.message}}
+                </div>
+              {{/if}}
+
+              {{!-- PERCENTAGE VARIATION RESULT --}}
+              {{#if (equals selectedMode "variation")}}
+                <h5 class="fw-bold text-primary mb-3">Modo: Variación Porcentual</h5>
+                <h6 class="fw-bold">Porcentaje de variación de cada mes:</h6>
+                <ul class="list-group mb-3">
+                  {{#each result.monthlyVariations as |item|}}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                      <span><strong>{{item.monthLabel}}</strong></span>
+                      <span>{{item.variationText}}</span>
+                    </li>
+                  {{/each}}
+                </ul>
+                <p class="fs-5">
+                  <strong>Promedio general de variación:</strong> <span class="badge bg-secondary">{{result.averageVariation}}</span>
+                </p>
+                <div class="alert alert-info mb-0">
+                  {{result.message}}
+                </div>
+              {{/if}}
+
+              {{!-- TREND DETECTION RESULT --}}
+              {{#if (equals selectedMode "trend")}}
+                <h5 class="fw-bold text-primary mb-3">Modo: Detección de Tendencia</h5>
+
+                <h6 class="fw-bold">Comparación secuencial mes a mes:</h6>
+                <ul class="list-group mb-3">
+                  {{#each result.details as |item|}}
+                    <li class="list-group-item font-monospace">
+                      {{item}}
+                    </li>
+                  {{/each}}
+                </ul>
+
+                <ul class="list-group mb-3">
+                  <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><strong>Cantidad de aumentos (meses que subieron):</strong></span>
+                    <span class="badge bg-success rounded-pill fs-6">{{result.increases}}</span>
+                  </li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><strong>Cantidad de disminuciones (meses que bajaron):</strong></span>
+                    <span class="badge bg-danger rounded-pill fs-6">{{result.decreases}}</span>
+                  </li>
+                  <li class="list-group-item d-flex justify-content-between align-items-center">
+                    <span><strong>Cantidad de meses estables:</strong></span>
+                    <span class="badge bg-secondary rounded-pill fs-6">{{result.stables}}</span>
+                  </li>
+                </ul>
+                <div class="alert alert-info mb-0">
+                  <strong>Tendencia general del consumo:</strong> {{result.generalTrend}}
+                </div>
+              {{/if}}
+
+            </div>
+          </div>
+        {{/if}}
+
+      </div>
+    </div>
+  </main>
+</body>
+</html>
